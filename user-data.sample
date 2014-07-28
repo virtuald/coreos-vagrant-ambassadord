@@ -62,7 +62,7 @@ coreos:
         ExecStartPre=/bin/bash -c "/usr/bin/docker inspect $IMG &> /dev/null || /usr/bin/docker pull $IMG"
         ExecStartPre=/bin/bash -c "/usr/bin/docker rm $CNAME &> /dev/null; exit 0"
         ExecStart=/usr/bin/docker run --name $CNAME --rm -h %H -v /var/run/docker.sock:/tmp/docker.sock $IMG -ip=${COREOS_PRIVATE_IPV4} etcd://${COREOS_PRIVATE_IPV4}:4001/services
-        ExecStop=/usr/bin/docker kill $CNAME
+        ExecStop=/usr/bin/docker stop $CNAME
 
     - name: ambassadord.service
       command: start
@@ -83,6 +83,6 @@ coreos:
         ExecStop=/usr/bin/docker kill $CNAME
 
         ExecStartPost=/bin/bash -c " \
-          until [ \"`/usr/bin/docker inspect -f {{.State.Running}} ${CNAME}`\" == 'true' ]; do sleep 0.1; done; \
+          until [ \"`/usr/bin/docker inspect -f {{.State.Running}} ${CNAME}`\" == \"true\" ]; do sleep 0.1; done; \
           /usr/bin/docker run --rm --privileged --net container:${CNAME} $IMG --setup-iptables"
 
