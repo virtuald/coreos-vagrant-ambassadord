@@ -1,0 +1,11 @@
+[Unit]
+Description=NSQ admin interface
+
+[Service]
+EnvironmentFile=/etc/environment
+ExecStart=/bin/bash -c '/usr/bin/docker rm nsqadmin &> /dev/null; /usr/bin/docker run --name nsqadmin --rm -p 4171:4171 --link backends:nsqlookupd -e BACKEND_4161=etcd://${COREOS_PRIVATE_IPV4}:4001/services/nsqlookupd virtuald/nsq:nsqadmin-0.2.29'
+ExecStop=/usr/bin/docker stop nsqadmin
+
+[X-Fleet]
+X-Conflicts=nsqadmin.service
+

@@ -1,0 +1,17 @@
+[Unit]
+Description=NSQ daemon instance
+
+[Service]
+TimeoutStartSec=30m
+EnvironmentFile=/etc/environment
+Environment=IMG=virtuald/nsq:nsqd-0.2.29 CNAME=nsqd
+
+ExecStartPre=/bin/bash -c "/usr/bin/docker inspect $IMG &> /dev/null || /usr/bin/docker pull $IMG"
+ExecStartPre=/bin/bash -c "/usr/bin/docker rm $CNAME &> /dev/null; exit 0"
+ExecStart=/usr/bin/docker run --name $CNAME --rm -p 4150:4150 -p 4151:4151 --link backends:nsqlookupd -e BACKEND_4160=etcd://${COREOS_PRIVATE_IPV4}:4001/services/nsqlookupd -e SERVICE_NAME=nsqd $IMG -broadcast-address ${COREOS_PRIVATE_IPV4}
+ExecStop=/usr/bin/docker stop $CNAME
+
+
+[X-Fleet]
+X-Conflicts=nsqd.service
+

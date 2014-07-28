@@ -5,6 +5,8 @@ coreos:
       # generate a new token for each unique cluster from https://discovery.etcd.io/new
       # WARNING: replace each time you 'vagrant destroy'
       #discovery: https://discovery.etcd.io/<token>
+      #discovery: https://discovery.etcd.io/5f339575e37141e7ad35b29440a79b03
+      #discovery: http://10.10.10.10:4001/v2/keys/$TOKEN
       addr: $public_ipv4:4001
       peer-addr: $public_ipv4:7001
   units:
@@ -20,6 +22,7 @@ coreos:
         [Service]
         Environment=FLEET_PUBLIC_IP=$public_ipv4
         ExecStart=/usr/bin/fleet
+
     - name: docker-tcp.socket
       command: start
       enable: true
@@ -34,3 +37,52 @@ coreos:
 
         [Install]
         WantedBy=sockets.target
+
+    - name: discovery.target
+      command: start
+      enable: true
+      content: |
+        [Unit]
+        Description=Core service discovery services
+        Wants=registrator.service ambassadord.service
+
+    - name: registrator.service
+      command: start
+      enable: true
+      content: |
+        [Unit]
+        Description=Docker service registrator
+        After=docker.service etcd.service
+
+        [Service]
+        TimeoutStartSec=30m
+        EnvironmentFile=/etc/environment
+        Environment=IMG=virtuald/registrator CNAME=registrator
+
+        ExecStartPre=/bin/bash -c "/usr/bin/docker inspect $IMG &> /dev/null || /usr/bin/docker pull $IMG"
+        ExecStartPre=/bin/bash -c "/usr/bin/docker rm $CNAME &> /dev/null; exit 0"
+        ExecStart=/usr/bin/docker run --name $CNAME --rm -h %H -v /var/run/docker.sock:/tmp/docker.sock $IMG -ip=${COREOS_PRIVATE_IPV4} etcd://${COREOS_PRIVATE_IPV4}:4001/services
+        ExecStop=/usr/bin/docker kill $CNAME
+
+    - name: ambassadord.service
+      command: start
+      enable: true
+      content: |
+        [Unit]
+        Description=Docker generic ambassador
+        After=docker.service etcd.service
+
+        [Service]
+        TimeoutStartSec=30m
+        EnvironmentFile=/etc/environment
+        Environment=IMG=virtuald/ambassadord CNAME=backends
+
+        ExecStartPre=/bin/bash -c "/usr/bin/docker inspect $IMG &> /dev/null || /usr/bin/docker pull $IMG"
+        ExecStartPre=/bin/bash -c "/usr/bin/docker rm $CNAME &> /dev/null; exit 0"
+        ExecStart=/usr/bin/docker run --rm --name $CNAME -v /var/run/docker.sock:/var/run/docker.sock $IMG --omnimode
+        ExecStop=/usr/bin/docker kill $CNAME
+
+        ExecStartPost=/bin/bash -c " \
+          until [ \"`/usr/bin/docker inspect -f {{.State.Running}} ${CNAME}`\" == 'true' ]; do sleep 0.1; done; \
+          /usr/bin/docker run --rm --privileged --net container:${CNAME} $IMG --setup-iptables"
+
